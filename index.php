@@ -16,10 +16,10 @@ $allow_create_folder = false; // Set to false to disable folder creation
 $allow_direct_link = false; // Set to false to only allow downloads and not direct link
 $allow_show_folders = false; // Set to false to hide all subdirectories
 
-$disallowed_extensions = ['','jar','md','htm','html','php','php3','php4','png','py','pyc','rb','txt','zip'];  // must be an array. Extensions disallowed to be uploaded
+$disallowed_extensions = ['','jar','md','htm','html','php','php3','php4','png','py','pyc','rb','txt','zip','json','xml'];  // must be an array. Extensions disallowed to be uploaded
 $hidden_extensions = $disallowed_extensions; // must be an array of lowercase file extensions. Extensions hidden in directory index
 
-$PASSWORD = '';  // Set the password, to access the file manager... (optional)
+$PASSWORD = '#PASS#';  // Set the password, to access the file manager... (optional)
 
 if($PASSWORD) {
 
@@ -58,7 +58,7 @@ if($_POST) {
 		err(403,"XSRF Failure");
 }
 
-$file = $_REQUEST['file'] ?: '.';
+$file = $_REQUEST['file'] ?: './repo';
 if($_GET['do'] == 'list') {
 	if (is_dir($file)) {
 		$directory = $file;
