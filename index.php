@@ -16,19 +16,24 @@ $allow_create_folder = false; // Set to false to disable folder creation
 $allow_direct_link = false; // Set to false to only allow downloads and not direct link
 $allow_show_folders = false; // Set to false to hide all subdirectories
 
-$disallowed_extensions = ['','jar','md','htm','html','php','php3','php4','png','py','pyc','rb','txt','zip','json','xml'];  // must be an array. Extensions disallowed to be uploaded
-$hidden_extensions = $disallowed_extensions; // must be an array of lowercase file extensions. Extensions hidden in directory index
+// Exactly one of blacklisted_extensions and whistelisted_extensions should be nonempty
+$blacklisted_extensions = []; // must be an array. Extensions blacklisted for download and upload.
+$whitelisted_extensions = ['apk']; // must be an array. Extensions whistelisted to be uploaded.
+
+// Log file
+$log = "/tmp/filemanager.log";
 
 $PASSWORD = '#PASS#';  // Set the password, to access the file manager... (optional)
+$SESSION_ID = $_SERVER['PHP_SELF'];
 
 if($PASSWORD) {
 
 	session_start();
-	if(!$_SESSION['_sfm_allowed']) {
+	if(!$_SESSION[$SESSION_ID]) {
 		// sha1, and random bytes to thwart timing attacks.  Not meant as secure hashing.
 		$t = bin2hex(openssl_random_pseudo_bytes(10));
 		if($_POST['p'] && sha1($t.$_POST['p']) === sha1($t.$PASSWORD)) {
-			$_SESSION['_sfm_allowed'] = true;
+			$_SESSION[$SESSION_ID] = true;
 			header('Location: ?');
 		}
 		echo '<html><body><form action=? method=post>PASSWORD:<input type=password name=p /></form></body></html>';
@@ -64,7 +69,7 @@ if($_GET['do'] == 'list') {
 		$directory = $file;
 		$result = [];
 		$files = array_diff(scandir($directory), ['.','..']);
-		foreach ($files as $entry) if (!is_entry_ignored($entry, $allow_show_folders, $hidden_extensions)) {
+		foreach ($files as $entry) if (!is_entry_ignored($entry)) {
 		$i = $directory . '/' . $entry;
 		$stat = stat($i);
 	        $result[] = [
@@ -103,11 +108,21 @@ if($_GET['do'] == 'list') {
 	var_dump($_POST);
 	var_dump($_FILES);
 	var_dump($_FILES['file_data']['tmp_name']);
-	foreach($disallowed_extensions as $ext)
-		if(preg_match(sprintf('/\.%s$/',preg_quote($ext)), $_FILES['file_data']['name']))
-			err(403,"Files of this type are not allowed.");
 
-	var_dump(move_uploaded_file($_FILES['file_data']['tmp_name'], $file.'/'.$_FILES['file_data']['name']));
+	// Check the file to be uploaded according to the blacklist and whitelist
+	check_tobeuploaded_file();
+
+	// Upload the should-be-apk file
+	$uploadedPath = $file.'/'.$_FILES['file_data']['name'];
+	var_dump(move_uploaded_file($_FILES['file_data']['tmp_name'], $uploadedPath));
+
+	// Check that file and delete it if it fails the zip file check
+	file_put_contents($log, "APK Check\n");
+	file_put_contents($log, "Checking whether this is apk: " . $uploadedPath . '\n', FILE_APPEND);
+	if (!is_zip_archive($uploadedPath)) {
+		file_put_contents($log, "is not zip archive; unlinking...\n", FILE_APPEND);
+		unlink($uploadedPath);
+	}
 	exit;
 } elseif ($_GET['do'] == 'download') {
 	$filename = basename($file);
@@ -120,7 +135,40 @@ if($_GET['do'] == 'list') {
 	exit;
 }
 
-function is_entry_ignored($entry, $allow_show_folders, $hidden_extensions) {
+function check_tobeuploaded_file() {
+	global $blacklisted_extensions;
+	global $whitelisted_extensions;
+
+	if (count($blacklisted_extensions) > 0) {
+		foreach($blacklisted_extensions as $ext)
+			if(preg_match(sprintf('/\.%s$/',preg_quote($ext)), $_FILES['file_data']['name']))
+				err(403,"Files of this type are not allowed.");
+	}
+	if (count($whitelisted_extensions) > 0) {
+		foreach($whitelisted_extensions as $ext)
+			if(!preg_match(sprintf('/\.%s$/',preg_quote($ext)), $_FILES['file_data']['name']))
+				err(403,"Files of this type are not allowed.");
+	}
+}
+
+function is_zip_archive($path) {
+	global $log;
+	file_put_contents($log, "in is_zip_archive()!\n", FILE_APPEND);
+	$zip = new ZipArchive();
+	$res = $zip->open($path, ZipArchive::CHECKCONS);
+	if ($res === TRUE) {
+		file_put_contents($log, "opened with TRUE\n", FILE_APPEND);
+		$zip->close();
+		return true;
+	}
+	file_put_contents($log, "opened with FALSE; killing it...\n", FILE_APPEND);
+	return false;
+}
+
+function is_entry_ignored($entry) {
+	global $allow_show_folders;
+	global $blacklisted_extensions;
+	global $whitelisted_extensions;
 	if ($entry === basename(__FILE__)) {
 		return true;
 	}
@@ -130,7 +178,12 @@ function is_entry_ignored($entry, $allow_show_folders, $hidden_extensions) {
 	}
 
 	$ext = strtolower(pathinfo($entry, PATHINFO_EXTENSION));
-	if (in_array($ext, $hidden_extensions)) {
+
+	if (count($blacklisted_extensions) > 0 && in_array($ext, $blacklisted_extensions)) {
+		return true;
+	}
+
+	if (count($whitelisted_extensions) > 0 && !in_array($ext, $whitelisted_extensions)) {
 		return true;
 	}
 
