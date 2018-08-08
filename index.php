@@ -3,7 +3,7 @@
 Simple PHP File Manager
 Copyright John Campbell (jcampbell1)
 
-Liscense: MIT
+License: MIT
 ********************************/
 
 //Disable error report for undefined superglobals
@@ -16,9 +16,13 @@ $allow_create_folder = false; // Set to false to disable folder creation
 $allow_direct_link = false; // Set to false to only allow downloads and not direct link
 $allow_show_folders = false; // Set to false to hide all subdirectories
 
-// Exactly one of blacklisted_extensions and whistelisted_extensions should be nonempty
-$blacklisted_extensions = []; // must be an array. Extensions blacklisted for download and upload.
-$whitelisted_extensions = ['apk']; // must be an array. Extensions whistelisted to be uploaded.
+// Exactly one of upload_blacklisted_extensions and upload_whistelisted_extensions should be nonempty
+$upload_blacklisted_extensions = [];  // must be an array. Extensions disallowed for upload
+$upload_whitelisted_extensions = ['apk'];  // must be an array. Extensions disallowed for upload
+
+// Exactly one of download_blacklisted_extensions and download_whitelisted_extensions should be nonempty
+$download_blacklisted_extensions = []; // must be an array. Extensions blacklisted for download.
+$download_whitelisted_extensions = ['apk']; // must be an array. Extensions whitelisted for download.
 
 // Log file
 $log = "/tmp/filemanager.log";
@@ -136,16 +140,16 @@ if($_GET['do'] == 'list') {
 }
 
 function check_tobeuploaded_file() {
-	global $blacklisted_extensions;
-	global $whitelisted_extensions;
-
-	if (count($blacklisted_extensions) > 0) {
-		foreach($blacklisted_extensions as $ext)
+	global $upload_blacklisted_extensions;
+	if (count($upload_blacklisted_extensions) > 0) {
+		foreach($upload_blacklisted_extensions as $ext)
 			if(preg_match(sprintf('/\.%s$/',preg_quote($ext)), $_FILES['file_data']['name']))
 				err(403,"Files of this type are not allowed.");
 	}
-	if (count($whitelisted_extensions) > 0) {
-		foreach($whitelisted_extensions as $ext)
+
+	global $upload_whitelisted_extensions;
+	if (count($upload_whitelisted_extensions) > 0) {
+		foreach($upload_whitelisted_extensions as $ext)
 			if(!preg_match(sprintf('/\.%s$/',preg_quote($ext)), $_FILES['file_data']['name']))
 				err(403,"Files of this type are not allowed.");
 	}
@@ -166,23 +170,23 @@ function is_zip_archive($path) {
 }
 
 function is_entry_ignored($entry) {
-	global $allow_show_folders;
-	global $blacklisted_extensions;
-	global $whitelisted_extensions;
 	if ($entry === basename(__FILE__)) {
 		return true;
 	}
 
+	global $allow_show_folders;
 	if (is_dir($entry) && !$allow_show_folders) {
 		return true;
 	}
 
 	$ext = strtolower(pathinfo($entry, PATHINFO_EXTENSION));
 
+	global $download_blacklisted_extensions;
 	if (count($blacklisted_extensions) > 0 && in_array($ext, $blacklisted_extensions)) {
 		return true;
 	}
 
+	global $download_whitelisted_extensions;
 	if (count($whitelisted_extensions) > 0 && !in_array($ext, $whitelisted_extensions)) {
 		return true;
 	}
