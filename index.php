@@ -18,7 +18,7 @@ $allow_show_folders = false; // Set to false to hide all subdirectories
 
 // Exactly one of upload_blacklisted_extensions and upload_whistelisted_extensions should be nonempty
 $upload_blacklisted_extensions = [];  // must be an array. Extensions disallowed for upload
-$upload_whitelisted_extensions = ['apk'];  // must be an array. Extensions disallowed for upload
+$upload_whitelisted_extensions = ['apk'];  // must be an array. Extensions allowed for upload
 
 // Exactly one of download_blacklisted_extensions and download_whitelisted_extensions should be nonempty
 $download_blacklisted_extensions = []; // must be an array. Extensions blacklisted for download.
@@ -106,15 +106,11 @@ if($_GET['do'] == 'list') {
 	@mkdir($_POST['name']);
 	exit;
 } elseif ($_POST['do'] == 'upload' && $allow_upload) {
-	// check the file to be uploaded according to the blacklist and whitelist
-	check_tobeuploaded_file();
-	$uploadedPath = $file.'/'.$_FILES['file_data']['name'];
-	$res = move_uploaded_file($_FILES['file_data']['tmp_name'], $uploadedPath);
-	// check that file and delete it if it fails the zip file check
-	if (!is_zip_archive($uploadedPath)) {
-		error_log("$uploadedPath is not zip archive; unlinking...");
-		unlink($uploadedPath);
-	}
+	preupload_checks();
+	$tempPath = $_FILES['file_data']['tmp_name'];
+	$savePath = $file . '/' . $_FILES['file_data']['name'];
+	move_uploaded_file($tempPath, $savePath);
+	postupload_checks($savePath);
 	exit;
 } elseif ($_GET['do'] == 'download') {
 	$filename = basename($file);
@@ -128,7 +124,7 @@ if($_GET['do'] == 'list') {
 	exit;
 }
 
-function check_tobeuploaded_file() {
+function preupload_checks() {
 	global $upload_blacklisted_extensions;
 	if (count($upload_blacklisted_extensions) > 0) {
 		foreach($upload_blacklisted_extensions as $ext)
@@ -144,15 +140,25 @@ function check_tobeuploaded_file() {
 	}
 }
 
-function is_zip_archive($path) {
+function postupload_checks($path) {
 	$zip = new ZipArchive();
 	$res = $zip->open($path, ZipArchive::CHECKCONS);
 	if ($res === TRUE) {
 		$zip->close();
-		return true;
+		return;
 	}
-	error_log("opened $path as Zip = FALSE");
-	return false;
+
+	switch($res) {
+	case ZipArchive::ER_INCONS:
+		// inconsistency may be caused by wrong signature, lets still allow it
+		return;
+	case ZipArchive::ER_NOZIP:
+	case ZipArchive::ER_CRC:
+	default:
+		error_log('invalid apk file: ' . $path);
+		unlink($uploadedPath);
+		return;
+	}
 }
 
 function is_entry_ignored($entry) {
@@ -168,12 +174,12 @@ function is_entry_ignored($entry) {
 	$ext = strtolower(pathinfo($entry, PATHINFO_EXTENSION));
 
 	global $download_blacklisted_extensions;
-	if (count($blacklisted_extensions) > 0 && in_array($ext, $blacklisted_extensions)) {
+	if (count($download_blacklisted_extensions) > 0 && in_array($ext, $download_blacklisted_extensions)) {
 		return true;
 	}
 
 	global $download_whitelisted_extensions;
-	if (count($whitelisted_extensions) > 0 && !in_array($ext, $whitelisted_extensions)) {
+	if (count($download_whitelisted_extensions) > 0 && !in_array($ext, $download_whitelisted_extensions)) {
 		return true;
 	}
 
