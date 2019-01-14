@@ -3,7 +3,7 @@
 Simple PHP File Manager
 Copyright John Campbell (jcampbell1)
 
-License: MIT
+Liscense: MIT
 ********************************/
 
 //Disable error report for undefined superglobals
@@ -24,9 +24,6 @@ $upload_whitelisted_extensions = ['apk'];  // must be an array. Extensions disal
 $download_blacklisted_extensions = []; // must be an array. Extensions blacklisted for download.
 $download_whitelisted_extensions = ['apk']; // must be an array. Extensions whitelisted for download.
 
-// Log file
-$log = "/tmp/filemanager.log";
-
 $PASSWORD = '#PASS#';  // Set the password, to access the file manager... (optional)
 $SESSION_ID = $_SERVER['PHP_SELF'];
 
@@ -40,7 +37,7 @@ if($PASSWORD) {
 			$_SESSION[$SESSION_ID] = true;
 			header('Location: ?');
 		}
-		echo '<html><body><form action=? method=post>PASSWORD:<input type=password name=p /></form></body></html>';
+		echo '<html><body><form action=? method=post style=margin:auto;width:8em;>PASSWORD:<input type=password name=p /></form></body></html>';
 		exit;
 	}
 }
@@ -109,22 +106,13 @@ if($_GET['do'] == 'list') {
 	@mkdir($_POST['name']);
 	exit;
 } elseif ($_POST['do'] == 'upload' && $allow_upload) {
-	var_dump($_POST);
-	var_dump($_FILES);
-	var_dump($_FILES['file_data']['tmp_name']);
-
-	// Check the file to be uploaded according to the blacklist and whitelist
+	// check the file to be uploaded according to the blacklist and whitelist
 	check_tobeuploaded_file();
-
-	// Upload the should-be-apk file
 	$uploadedPath = $file.'/'.$_FILES['file_data']['name'];
-	var_dump(move_uploaded_file($_FILES['file_data']['tmp_name'], $uploadedPath));
-
-	// Check that file and delete it if it fails the zip file check
-	file_put_contents($log, "APK Check\n");
-	file_put_contents($log, "Checking whether this is apk: " . $uploadedPath . '\n', FILE_APPEND);
+	$res = move_uploaded_file($_FILES['file_data']['tmp_name'], $uploadedPath);
+	// check that file and delete it if it fails the zip file check
 	if (!is_zip_archive($uploadedPath)) {
-		file_put_contents($log, "is not zip archive; unlinking...\n", FILE_APPEND);
+		error_log("$uploadedPath is not zip archive; unlinking...");
 		unlink($uploadedPath);
 	}
 	exit;
@@ -156,16 +144,13 @@ function check_tobeuploaded_file() {
 }
 
 function is_zip_archive($path) {
-	global $log;
-	file_put_contents($log, "in is_zip_archive()!\n", FILE_APPEND);
 	$zip = new ZipArchive();
 	$res = $zip->open($path, ZipArchive::CHECKCONS);
 	if ($res === TRUE) {
-		file_put_contents($log, "opened with TRUE\n", FILE_APPEND);
 		$zip->close();
 		return true;
 	}
-	file_put_contents($log, "opened with FALSE; killing it...\n", FILE_APPEND);
+	error_log("opened $path as Zip = FALSE");
 	return false;
 }
 
@@ -478,7 +463,7 @@ $(function(){
 	}
 	function renderBreadcrumbs(path) {
 		var base = "",
-			$html = $('<div/>').append( $('<a href=#>Home</a></div>') );
+			$html = $('<div/>');
 		$.each(path.split('/'),function(k,v){
 			if(v) {
 				var v_as_text = decodeURIComponent(v);
